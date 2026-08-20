@@ -1,9 +1,18 @@
-from fastapi import FastAPI, Request, Response
+import os
+from fastapi import FastAPI, Response
+from pydantic import BaseModel
 import httpx
+from src.config import settings
+from src.guardrails.input import run_input_guardrails
+from src.schemas.guardrail import GuardrailAction
 
 app = FastAPI(title="Guardrail Proxy Framework")
 
-TARGET_LLM_URL = "https://api.openai.com"
+TARGET_LLM_URL = settings.API_ENDPOINT
+MODEL_NAME = settings.MODEL_NAME
+
+class ChatRequest(BaseModel):
+    prompt: str
 
 @app.on_event("startup")
 async def startup_event():
@@ -13,38 +22,53 @@ async def startup_event():
 async def shutdown_event():
     await app.state.client.aclose()
 
-def validate_input_guardrails(body_bytes: bytes):
-    pass
-
 def validate_output_guardrails(response_content: bytes):
     pass
 
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
-async def proxy_handler(request: Request, path: str):
-    body = await request.body()
+@app.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    # 1. Run Input Guardrails on prompt
+    guardrail_result = await run_input_guardrails(request.prompt)
 
-    validate_input_guardrails(body)
+    if guardrail_result.action == GuardrailAction.BLOCK:
+        return {
+            "blocked": True,
+            "reason": guardrail_result.reason,
+            "response": "",
+        }
 
-    headers = dict(request.headers)
-    headers.pop("host", None) 
+    if settings.DRY_RUN:
+        return {
+            "blocked": False,
+            "reason": guardrail_result.reason,
+            "response": "[LLM call skipped]",
+        }
 
-    client: httpx.AsyncClient = request.app.state.client
-    upstream_response = await client.request(
-        method=request.method,
-        url=f"/{path}",
-        headers=headers,
-        params=dict(request.query_params),
-        content=body,
+    # 2. Forward (PII-masked) prompt to Ollama /api/generate using default MODEL_NAME
+    client: httpx.AsyncClient = app.state.client
+    upstream_response = await client.post(
+        "/api/generate",
+        json={
+            "model": MODEL_NAME,
+            "prompt": guardrail_result.modified_content,
+            "stream": False
+        }
     )
 
+    # 3. Run Output Guardrails on response
     validate_output_guardrails(upstream_response.content)
 
-    response_headers = dict(upstream_response.headers)
-    response_headers.pop("content-encoding", None)
-    response_headers.pop("content-length", None)
-
-    return Response(
-        content=upstream_response.content,
-        status_code=upstream_response.status_code,
-        headers=response_headers,
-    )
+    # Parse response JSON and extract clean fields
+    try:
+        data = upstream_response.json()
+        clean_response = {
+            "response": data.get("response", ""),
+            "model": data.get("model", MODEL_NAME)
+        }
+        return clean_response
+    except Exception:
+        return Response(
+            content=upstream_response.content,
+            status_code=upstream_response.status_code,
+            media_type="application/json"
+        )
