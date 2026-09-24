@@ -25,16 +25,28 @@ async def shutdown_event():
 def validate_output_guardrails(response_content: bytes):
     pass
 
+@app.get("/")
+async def health_check():
+    return {"status": "ok"}
+
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     # 1. Run Input Guardrails on prompt
     guardrail_result = await run_input_guardrails(request.prompt)
+
+    ml_result = guardrail_result.ml_classifier_result
+    ml_classifier_info = {
+        "action": ml_result.action.value,
+        "reason": ml_result.reason,
+        "score": ml_result.score,
+    }
 
     if guardrail_result.action == GuardrailAction.BLOCK:
         return {
             "blocked": True,
             "reason": guardrail_result.reason,
             "response": "",
+            "ml_classifier": ml_classifier_info,
         }
 
     if settings.DRY_RUN:
@@ -42,6 +54,7 @@ async def chat_endpoint(request: ChatRequest):
             "blocked": False,
             "reason": guardrail_result.reason,
             "response": "[LLM call skipped]",
+            "ml_classifier": ml_classifier_info,
         }
 
     # 2. Forward (PII-masked) prompt to Ollama /api/generate using default MODEL_NAME
@@ -63,7 +76,8 @@ async def chat_endpoint(request: ChatRequest):
         data = upstream_response.json()
         clean_response = {
             "response": data.get("response", ""),
-            "model": data.get("model", MODEL_NAME)
+            "model": data.get("model", MODEL_NAME),
+            "ml_classifier": ml_classifier_info,
         }
         return clean_response
     except Exception:

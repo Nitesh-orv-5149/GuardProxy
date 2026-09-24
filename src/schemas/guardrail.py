@@ -37,6 +37,7 @@ class TotalInputGuardrailResult(BaseModel):
     jailbreak_result: GuardrailCheckResult = Field(..., description="Jailbreak guardrail result")
     pii_result: GuardrailCheckResult = Field(..., description="PII detection/masking guardrail result")
     toxic_content_result: GuardrailCheckResult = Field(..., description="Toxic content guardrail result")
+    ml_classifier_result: GuardrailCheckResult = Field(..., description="ML classifier guardrail result")
     action: GuardrailAction = Field(
         default=GuardrailAction.ALLOW,
         description="Action to take: allow, block, or modify"

@@ -8,6 +8,7 @@
 
 Further documentation lives in [`docs/`](docs/):
 - [Input Guardrails](docs/INPUT_GUARDRAILS.md) — how the input guardrail pipeline works
+- [Input Classifier Trainer](docs/TRAINER.md) — training and hot-swapping the ML input classifier
 - [Test Prompts](docs/TEST_PROMPTS.md) — example blockable and allowable prompts for manual testing
 - [Features & Roadmap](docs/TODO.md) — current capabilities and planned work
 
@@ -20,6 +21,9 @@ GuardProxy is configured using environment variables specified in a `.env` file 
 - `API_ENDPOINT`: The base URL of the upstream target LLM service.
 - `MODEL_NAME`: The default model name to specify in upstream generation requests.
 - `DRY_RUN`: When `true`, skips forwarding the prompt to the upstream LLM entirely. Useful for testing guardrails without an LLM backend running. Non-blocked requests return `{"blocked": false, "reason": ..., "response": "[LLM call skipped]"}` instead of a real completion.
+- `ML_MODEL_DIR` (default `models/input_classifier`): where trained classifier versions and `pointer.json` live.
+- `ML_CLASSIFIER_THRESHOLD` (default `0.5`): minimum confidence for the ML classifier to block a non-`safe` prediction.
+- `ML_MIN_MACRO_F1` (default `0.75`): quality gate a retrain must clear before it ships. See [TRAINER.md](docs/TRAINER.md).
 
 Example `.env` file:
 ```env
@@ -61,3 +65,5 @@ curl -X POST "http://localhost:8000/chat" \
      -H "Content-Type: application/json" \
      -d '{"prompt": "Hello, world!"}'
 ```
+
+Every response includes an `ml_classifier` object (`action`, `reason`, `score`) showing the ML classifier's verdict, even when a regex check was what decided the request.

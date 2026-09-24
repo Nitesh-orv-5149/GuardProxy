@@ -9,11 +9,14 @@ from .prompt_injection import check_prompt_injection
 from .jailbreak import check_jailbreak
 from .toxic_content import check_toxic_content
 from .pii_masker import mask_pii
+from .ml_classifier import check_ml_classifier
 
 # Priority order used to pick which BLOCK reason surfaces when multiple
 # checks fail at once (checks run concurrently, so no check short-circuits
-# the others).
-BLOCK_PRIORITY = ["prompt_injection", "jailbreak", "toxic_content"]
+# the others). The regex checks are exact-pattern matches and keep priority
+# over the ML classifier, which is an additional net rather than a
+# replacement for them.
+BLOCK_PRIORITY = ["prompt_injection", "jailbreak", "toxic_content", "ml_classifier"]
 
 
 async def run_input_guardrails(text: str) -> TotalInputGuardrailResult:
@@ -21,11 +24,13 @@ async def run_input_guardrails(text: str) -> TotalInputGuardrailResult:
         injection_result,
         jailbreak_result,
         toxic_result,
+        ml_result,
         (masked_text, pii_result),
     ) = await asyncio.gather(
         asyncio.to_thread(check_prompt_injection, text),
         asyncio.to_thread(check_jailbreak, text),
         asyncio.to_thread(check_toxic_content, text),
+        asyncio.to_thread(check_ml_classifier, text),
         asyncio.to_thread(mask_pii, text),
     )
 
@@ -33,6 +38,7 @@ async def run_input_guardrails(text: str) -> TotalInputGuardrailResult:
         "prompt_injection": injection_result,
         "jailbreak": jailbreak_result,
         "toxic_content": toxic_result,
+        "ml_classifier": ml_result,
     }
 
     blocking = [
@@ -66,6 +72,7 @@ async def run_input_guardrails(text: str) -> TotalInputGuardrailResult:
         jailbreak_result=jailbreak_result,
         pii_result=pii_result,
         toxic_content_result=toxic_result,
+        ml_classifier_result=ml_result,
         action=action,
         reason=reason,
         modified_content=masked_text,

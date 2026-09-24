@@ -69,3 +69,7 @@ docker-compose.override.yml
 
 # Logs
 *.log
+
+# Trained model artifacts and local training data
+/models/
+/data/
