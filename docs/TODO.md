@@ -32,16 +32,16 @@
 - [ ] Connection pooling and HTTP keep-alive optimization for upstream LLM requests
 
 #### ML Classifier (input, see [`docs/TRAINER.md`](TRAINER.md)):
-- [x] TF-IDF + LogisticRegression classifier trained via `python -m src.trainer.train`
+- [x] Three binary TF-IDF (word + char n-gram) + LogisticRegression heads trained via `python -m src.trainer.train`
 - [x] Hot-swap model shipping via a `pointer.json` + versioned artifacts (no docker rebuild/restart)
-- [x] Quality-gated shipping (won't ship a retrain below a minimum macro-F1)
-- [x] Public dataset source (`BudEcosystem/guardrail-training-data` via HuggingFace `datasets`, prototype-scale sample)
+- [x] Quality-gated shipping (per-head F1 on held-out split + block accuracy on a hand-written eval set)
+- [x] Public dataset sources: `deepset/prompt-injections`, `jackhhao/jailbreak-classification`, `lmsys/toxic-chat`
+- [ ] Improve the toxic head (F1 ≈ 0.63) and short/polite injection recall — see "Known limitations" in [`docs/TRAINER.md`](TRAINER.md)
+- [ ] Replace `lmsys/toxic-chat` (CC-BY-NC-4.0) before any commercial use
 - [ ] Training data sourced from live `/chat` traffic logs (needs request logging + a labeling workflow first)
 - [ ] Scheduled/cron retraining trigger (manual CLI only for now)
 - [ ] Output-guardrail ML classifier (input-only for now)
 - [ ] Transformer-based upgrade path (kept out for now to protect inference latency)
-- [ ] Improve shipped model quality: the current model (`v20260822-143004`) scores benign prompts as non-`safe` at ~0.4–0.48 confidence (passing only because they're under the 0.5 threshold), false-positives on "kill a python process", and misses paraphrased injection / DAN-style jailbreaks. See "Known limitations" in [`docs/TRAINER.md`](TRAINER.md).
-
 #### Testing & Quality:
 - [ ] Complete unit and integration test coverage
 - [ ] Automated CI/CD build and test pipeline

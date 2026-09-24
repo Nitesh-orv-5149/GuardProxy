@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from src.schemas.guardrail import (
     GuardrailAction,
@@ -19,7 +20,22 @@ from .ml_classifier import check_ml_classifier
 BLOCK_PRIORITY = ["prompt_injection", "jailbreak", "toxic_content", "ml_classifier"]
 
 
+def _timed(check, text: str) -> GuardrailCheckResult:
+    start = time.perf_counter()
+    result = check(text)
+    result.latency_ms = (time.perf_counter() - start) * 1000
+    return result
+
+
+def _timed_mask_pii(text: str) -> tuple[str, GuardrailCheckResult]:
+    start = time.perf_counter()
+    masked_text, result = mask_pii(text)
+    result.latency_ms = (time.perf_counter() - start) * 1000
+    return masked_text, result
+
+
 async def run_input_guardrails(text: str) -> TotalInputGuardrailResult:
+    start = time.perf_counter()
     (
         injection_result,
         jailbreak_result,
@@ -27,11 +43,15 @@ async def run_input_guardrails(text: str) -> TotalInputGuardrailResult:
         ml_result,
         (masked_text, pii_result),
     ) = await asyncio.gather(
-        asyncio.to_thread(check_prompt_injection, text),
-        asyncio.to_thread(check_jailbreak, text),
-        asyncio.to_thread(check_toxic_content, text),
-        asyncio.to_thread(check_ml_classifier, text),
-        asyncio.to_thread(mask_pii, text),
+        asyncio.to_thread(_timed, check_prompt_injection, text),
+        asyncio.to_thread(_timed, check_jailbreak, text),
+        asyncio.to_thread(_timed, check_toxic_content, text),
+        asyncio.to_thread(_timed, check_ml_classifier, text),
+        asyncio.to_thread(_timed_mask_pii, text),
+    )
+    latency_ms = (time.perf_counter() - start) * 1000
+    regex_latency_ms = max(
+        r.latency_ms for r in (injection_result, jailbreak_result, toxic_result, pii_result)
     )
 
     results_by_name = {
@@ -73,6 +93,8 @@ async def run_input_guardrails(text: str) -> TotalInputGuardrailResult:
         pii_result=pii_result,
         toxic_content_result=toxic_result,
         ml_classifier_result=ml_result,
+        regex_latency_ms=regex_latency_ms,
+        latency_ms=latency_ms,
         action=action,
         reason=reason,
         modified_content=masked_text,

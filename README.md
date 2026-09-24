@@ -23,7 +23,8 @@ GuardProxy is configured using environment variables specified in a `.env` file 
 - `DRY_RUN`: When `true`, skips forwarding the prompt to the upstream LLM entirely. Useful for testing guardrails without an LLM backend running. Non-blocked requests return `{"blocked": false, "reason": ..., "response": "[LLM call skipped]"}` instead of a real completion.
 - `ML_MODEL_DIR` (default `models/input_classifier`): where trained classifier versions and `pointer.json` live.
 - `ML_CLASSIFIER_THRESHOLD` (default `0.5`): minimum confidence for the ML classifier to block a non-`safe` prediction.
-- `ML_MIN_MACRO_F1` (default `0.75`): quality gate a retrain must clear before it ships. See [TRAINER.md](docs/TRAINER.md).
+- `ML_MIN_MACRO_F1` (default `0.75`): F1 every classifier head must reach on the held-out split before a retrain ships.
+- `ML_MIN_EVAL_ACCURACY` (default `0.8`): block accuracy a retrain must reach on the hand-written eval set. See [TRAINER.md](docs/TRAINER.md).
 
 Example `.env` file:
 ```env
@@ -66,4 +67,4 @@ curl -X POST "http://localhost:8000/chat" \
      -d '{"prompt": "Hello, world!"}'
 ```
 
-Every response includes an `ml_classifier` object (`action`, `reason`, `score`) showing the ML classifier's verdict, even when a regex check was what decided the request.
+Every response includes an `ml_classifier` object (`action`, `reason`, `score`, `latency_ms`, and per-head probabilities in `heads`) showing the ML classifier's verdict, even when a regex check was what decided the request, plus `regex.latency_ms` and the total `guardrail_latency_ms` (see [Input Guardrails](docs/INPUT_GUARDRAILS.md#api-behavior)).

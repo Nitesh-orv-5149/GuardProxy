@@ -43,80 +43,54 @@ class LocalCSVSource(DatasetSource):
         return examples
 
 
-class HFDatasetSource(DatasetSource):
-    """Streams a bounded sample from BudEcosystem/guardrail-training-data on
-    the HuggingFace Hub (~4M rows across 26 harm categories) and maps it onto
-    our four label classes.
+def _map_deepset(row: dict) -> tuple[str, str]:
+    return row["text"], "prompt_injection" if row["label"] == 1 else "safe"
 
-    The dataset only has one merged category for "Jailbreak & prompt
-    injection" — it doesn't distinguish the two the way our regex checks do
-    — so rows in that category are sub-classified by running them through
-    our own `check_prompt_injection`/`check_jailbreak` regex checks. Every
-    other unsafe category (hate speech, self-harm, violence, drugs, fraud,
-    etc.) collapses into `toxic`, matching the single broad `toxic_content`
-    regex check we already have. This keeps the ML classifier's label space
-    identical to the existing guardrail categories instead of introducing a
-    new taxonomy.
+
+def _map_jackhhao(row: dict) -> tuple[str, str]:
+    return row["prompt"], "jailbreak" if row["type"] == "jailbreak" else "safe"
+
+
+def _map_toxic_chat(row: dict) -> tuple[str, str]:
+    if row["jailbreaking"] == 1:
+        return row["user_input"], "jailbreak"
+    if row["toxicity"] == 1:
+        return row["user_input"], "toxic"
+    return row["user_input"], "safe"
+
+
+class HFDatasetSource(DatasetSource):
+    """Loads three purpose-built public datasets from the HuggingFace Hub,
+    each of which labels exactly one of our attack classes against benign:
+
+    - deepset/prompt-injections          -> prompt_injection vs safe
+    - jackhhao/jailbreak-classification  -> jailbreak vs safe
+    - lmsys/toxic-chat (toxicchat0124)   -> jailbreak / toxic vs safe
+      (real user prompts; CC-BY-NC-4.0, non-commercial)
+
+    Both train and test splits are used; train.py does its own split.
+    Duplicate texts are dropped (first label wins).
     """
 
-    DATASET_NAME = "BudEcosystem/guardrail-training-data"
-
-    def __init__(self, split: str = "train", max_samples: int = 10_000, seed: int = 42):
-        self.split = split
-        self.max_samples = max_samples
-        self.seed = seed
-
-    def _map_label(self, text: str, row: dict) -> str:
-        if row.get("is_safe"):
-            return "safe"
-
-        category = (row.get("category") or "").lower()
-        if "jailbreak" in category or "prompt injection" in category:
-            from src.guardrails.input.jailbreak import check_jailbreak
-            from src.guardrails.input.prompt_injection import check_prompt_injection
-            from src.schemas.guardrail import GuardrailAction
-
-            if check_prompt_injection(text).action == GuardrailAction.BLOCK:
-                return "prompt_injection"
-            if check_jailbreak(text).action == GuardrailAction.BLOCK:
-                return "jailbreak"
-            return "jailbreak"  # category name leads with "jailbreak"; default there
-
-        return "toxic"
+    SOURCES = [
+        ("deepset/prompt-injections", None, _map_deepset),
+        ("jackhhao/jailbreak-classification", None, _map_jackhhao),
+        ("lmsys/toxic-chat", "toxicchat0124", _map_toxic_chat),
+    ]
 
     def load(self) -> list[tuple[str, str]]:
         from datasets import load_dataset  # imported lazily; optional heavy dep
 
-        stream = load_dataset(self.DATASET_NAME, split=self.split, streaming=True)
-        stream = stream.shuffle(seed=self.seed, buffer_size=10_000)
-
-        # `safe` and `prompt_injection` (a narrow regex-matched slice of one
-        # merged dataset category) are rare next to the other 25 harm
-        # categories, so a pure random sample starves them. Bucket by our
-        # mapped label instead and cap each bucket at an even share of
-        # max_samples, scanning a bounded multiple of rows so a very rare
-        # label can't spin the stream forever.
-        per_label_cap = max(1, self.max_samples // len(LABEL_CLASSES))
-        max_rows_to_scan = self.max_samples * 50
-
-        buckets: dict[str, list[tuple[str, str]]] = {label: [] for label in LABEL_CLASSES}
-        rows_scanned = 0
-        for row in stream:
-            rows_scanned += 1
-            text = row.get("text")
-            if text:
-                label = self._map_label(str(text), row)
-                if len(buckets[label]) < per_label_cap:
-                    buckets[label].append((str(text), label))
-
-            if rows_scanned >= max_rows_to_scan:
-                break
-            if all(len(bucket) >= per_label_cap for bucket in buckets.values()):
-                break
-
-        examples = [example for bucket in buckets.values() for example in bucket]
-        if not examples:
-            raise RuntimeError(f"No examples loaded from {self.DATASET_NAME} split={self.split}")
+        seen: set[str] = set()
+        examples: list[tuple[str, str]] = []
+        for name, config, map_row in self.SOURCES:
+            for split in load_dataset(name, config).values():
+                for row in split:
+                    text, label = map_row(row)
+                    text = str(text or "").strip()
+                    if text and text not in seen:
+                        seen.add(text)
+                        examples.append((text, label))
         return examples
 
 

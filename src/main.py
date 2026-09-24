@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import httpx
 from src.config import settings
 from src.guardrails.input import run_input_guardrails
+from src.guardrails.input.model_registry import get_registry
 from src.schemas.guardrail import GuardrailAction
 
 app = FastAPI(title="Guardrail Proxy Framework")
@@ -17,6 +18,8 @@ class ChatRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     app.state.client = httpx.AsyncClient(base_url=TARGET_LLM_URL, timeout=60.0)
+    # Load the ML model now so the first request doesn't pay the ~1s joblib load.
+    get_registry().get()
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -39,14 +42,20 @@ async def chat_endpoint(request: ChatRequest):
         "action": ml_result.action.value,
         "reason": ml_result.reason,
         "score": ml_result.score,
+        "latency_ms": round(ml_result.latency_ms, 2),
+        **ml_result.details,
     }
+    regex_info = {"latency_ms": round(guardrail_result.regex_latency_ms, 2)}
+    guardrail_latency_ms = round(guardrail_result.latency_ms, 2)
 
     if guardrail_result.action == GuardrailAction.BLOCK:
         return {
             "blocked": True,
             "reason": guardrail_result.reason,
             "response": "",
+            "regex": regex_info,
             "ml_classifier": ml_classifier_info,
+            "guardrail_latency_ms": guardrail_latency_ms,
         }
 
     if settings.DRY_RUN:
@@ -54,7 +63,9 @@ async def chat_endpoint(request: ChatRequest):
             "blocked": False,
             "reason": guardrail_result.reason,
             "response": "[LLM call skipped]",
+            "regex": regex_info,
             "ml_classifier": ml_classifier_info,
+            "guardrail_latency_ms": guardrail_latency_ms,
         }
 
     # 2. Forward (PII-masked) prompt to Ollama /api/generate using default MODEL_NAME
@@ -77,7 +88,9 @@ async def chat_endpoint(request: ChatRequest):
         clean_response = {
             "response": data.get("response", ""),
             "model": data.get("model", MODEL_NAME),
+            "regex": regex_info,
             "ml_classifier": ml_classifier_info,
+            "guardrail_latency_ms": guardrail_latency_ms,
         }
         return clean_response
     except Exception:

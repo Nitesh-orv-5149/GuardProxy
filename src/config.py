@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     ML_MODEL_DIR: str = os.getenv("ML_MODEL_DIR", "models/input_classifier")
     ML_CLASSIFIER_THRESHOLD: float = float(os.getenv("ML_CLASSIFIER_THRESHOLD", "0.5"))
     ML_MIN_MACRO_F1: float = float(os.getenv("ML_MIN_MACRO_F1", "0.75"))
+    ML_MIN_EVAL_ACCURACY: float = float(os.getenv("ML_MIN_EVAL_ACCURACY", "0.8"))
 
     class Config:
         env_file = ".env"

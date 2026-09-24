@@ -24,3 +24,6 @@ def test_dry_run_skips_llm_call_for_allowed_prompt(monkeypatch):
     body = response.json()
     assert body["blocked"] is False
     assert body["response"] == "[LLM call skipped]"
+    assert body["regex"]["latency_ms"] > 0
+    assert body["ml_classifier"]["latency_ms"] >= 0
+    assert body["guardrail_latency_ms"] >= body["regex"]["latency_ms"]

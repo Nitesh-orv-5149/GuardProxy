@@ -17,7 +17,7 @@ them.
 | Prompt injection | `prompt_injection.py` | `BLOCK` |
 | Jailbreak / adversarial prompts | `jailbreak.py` | `BLOCK` |
 | Toxic / policy-violating content | `toxic_content.py` | `BLOCK` |
-| ML classifier (TF-IDF + LogisticRegression) | `ml_classifier.py` | `BLOCK` if non-`safe` with confidence ≥ `ML_CLASSIFIER_THRESHOLD`; `ALLOW` if no model is trained (see [TRAINER.md](TRAINER.md)) |
+| ML classifier (3 binary heads: injection / jailbreak / toxic) | `ml_classifier.py` | `BLOCK` if any head's probability ≥ `ML_CLASSIFIER_THRESHOLD`; `ALLOW` if no model is trained (see [TRAINER.md](TRAINER.md)) |
 | PII (email, SSN, credit card, phone) | `pii_masker.py` | `MODIFY` (redacts, does not block) |
 
 There used to be a separate `sensitive_data` check, but it used the exact
@@ -49,8 +49,15 @@ decision, so nothing is silently dropped.
   The upstream LLM is never called.
 - **Allowed**: the (possibly PII-masked) prompt is forwarded to the LLM as
   normal, and its response is returned as `{"response", "model", "ml_classifier"}`.
-- Every response carries `ml_classifier: {action, reason, score}` so the
-  classifier's verdict is visible even when it didn't decide the request.
+- Every response carries `ml_classifier: {action, reason, score, latency_ms, heads}`
+  so the classifier's verdict is visible even when it didn't decide the request.
+- Latency fields (milliseconds):
+  - `regex.latency_ms`: the slowest regex/PII check. They run concurrently,
+    so this is how long the regex group took.
+  - `ml_classifier.latency_ms`: time the classifier took to predict.
+  - `guardrail_latency_ms`: total wall time of the whole input pipeline
+    (≈ the slower of the two above, plus thread scheduling overhead).
+  - Per-check `latency_ms` is also on each `GuardrailCheckResult`.
 - **`DRY_RUN=true`**: skips the LLM call for allowed prompts too, returning
   `{"blocked": false, "reason": "...", "response": "[LLM call skipped]"}`.
   Useful for exercising the guardrail logic without an LLM backend running

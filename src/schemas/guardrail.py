@@ -25,6 +25,8 @@ class GuardrailCheckResult(BaseModel):
         default=GuardrailAction.ALLOW,
         description="Action to take: allow, block, or modify"
     )
+    latency_ms: float = Field(default=0.0, description="Time this check took to run")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Check-specific extra info")
 
 class TotalInputGuardrailResult(BaseModel):
     text: str = Field(..., description="Content or prompt text to evaluate")
@@ -38,6 +40,11 @@ class TotalInputGuardrailResult(BaseModel):
     pii_result: GuardrailCheckResult = Field(..., description="PII detection/masking guardrail result")
     toxic_content_result: GuardrailCheckResult = Field(..., description="Toxic content guardrail result")
     ml_classifier_result: GuardrailCheckResult = Field(..., description="ML classifier guardrail result")
+    regex_latency_ms: float = Field(
+        default=0.0,
+        description="Slowest regex/PII check (they run concurrently, so this is their wall time)"
+    )
+    latency_ms: float = Field(default=0.0, description="Total wall time of the whole input pipeline")
     action: GuardrailAction = Field(
         default=GuardrailAction.ALLOW,
         description="Action to take: allow, block, or modify"
