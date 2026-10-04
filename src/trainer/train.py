@@ -26,7 +26,8 @@ import sklearn
 
 from src.config import settings
 from src.trainer.data.loader import LABEL_CLASSES, DatasetSource, HFDatasetSource, LocalCSVSource
-from src.trainer.model import head_probabilities, train_and_evaluate
+from src.guardrails.input.ml_classifier import segment_probabilities
+from src.trainer.model import train_and_evaluate
 
 EVAL_PROMPTS_PATH = Path(__file__).parent / "eval_prompts.csv"
 
@@ -63,7 +64,7 @@ def evaluate_eval_set(vectorizer, model: dict, threshold: float) -> tuple[float,
     df = pd.read_csv(EVAL_PROMPTS_PATH)
     misses = []
     for text, label in zip(df["text"], df["label"]):
-        heads = head_probabilities(model, vectorizer.transform([text]))
+        heads = segment_probabilities(model, vectorizer, text)
         top = max(heads, key=heads.get)
         blocked = heads[top] >= threshold
         if blocked != (label != "safe"):

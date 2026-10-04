@@ -1,5 +1,7 @@
 import re
+
 from src.schemas.guardrail import GuardrailCheckResult, GuardrailAction
+from .normalize import normalize
 
 TOXIC_CONTENT_PATTERNS = [
     r"\b(?:kill|harm|destroy)\s+(?:yourself|yourselves)\b",
@@ -12,7 +14,7 @@ TOXIC_CONTENT_REGEX = re.compile("|".join(TOXIC_CONTENT_PATTERNS), re.IGNORECASE
 
 
 def check_toxic_content(text: str) -> GuardrailCheckResult:
-    match = TOXIC_CONTENT_REGEX.search(text)
+    match = TOXIC_CONTENT_REGEX.search(normalize(text))
     if match:
         return GuardrailCheckResult(
             passed=False,

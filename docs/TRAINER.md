@@ -9,8 +9,15 @@ manual CLI command — no automatic retraining or scheduling yet (see
 
 - **Features**: one shared vectorizer (`src/trainer/featurizer.py`), a
   `FeatureUnion` of word 1-2-gram TF-IDF (20k features) and character
-  3-5-gram TF-IDF (`char_wb`, 50k features). Char n-grams catch obfuscated
-  spellings ("ign0re") and partial-word paraphrases.
+  3-5-gram TF-IDF (`char_wb`, 50k features). Char n-grams catch
+  partial-word paraphrases. Both run `normalize()`
+  (`src/guardrails/input/normalize.py`: NFKC, zero-width chars stripped,
+  leetspeak like "1gn0r3" mapped back, lowercase) as their preprocessor, so
+  it's pickled with the model; the regex checks use the same function.
+- **Per-sentence scoring**: at inference each head scores the whole prompt
+  and each sentence separately and takes the max, so friendly filler around
+  an attack can't dilute it. Run `python -m src.trainer.evaluate` for the
+  full report (held-out metrics, threshold sweep, robustness, latency).
 - **Heads**: three independent binary `LogisticRegression` classifiers
   (`C=4`, `class_weight="balanced"`) — `prompt_injection`, `jailbreak`,
   `toxic` — each answering "is this prompt X?" (`src/trainer/model.py`).

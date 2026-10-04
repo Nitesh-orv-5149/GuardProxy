@@ -1,5 +1,7 @@
 import re
+
 from src.schemas.guardrail import GuardrailCheckResult, GuardrailAction
+from .normalize import normalize
 
 JAILBREAK_PATTERNS = [
     r"\b(?:DAN|do\s+anything\s+now)\b",
@@ -14,7 +16,7 @@ JAILBREAK_REGEX = re.compile("|".join(JAILBREAK_PATTERNS), re.IGNORECASE)
 
 
 def check_jailbreak(text: str) -> GuardrailCheckResult:
-    match = JAILBREAK_REGEX.search(text)
+    match = JAILBREAK_REGEX.search(normalize(text))
     if match:
         return GuardrailCheckResult(
             passed=False,

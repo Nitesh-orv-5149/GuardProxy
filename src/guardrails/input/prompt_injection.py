@@ -1,5 +1,7 @@
 import re
+
 from src.schemas.guardrail import GuardrailCheckResult, GuardrailAction
+from .normalize import normalize
 
 PROMPT_INJECTION_PATTERNS = [
     r"(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+)?(?:previous|prior|above|system)\s+(?:instructions|directives|prompts|rules)",
@@ -13,7 +15,7 @@ PROMPT_INJECTION_REGEX = re.compile("|".join(PROMPT_INJECTION_PATTERNS), re.IGNO
 
 
 def check_prompt_injection(text: str) -> GuardrailCheckResult:
-    match = PROMPT_INJECTION_REGEX.search(text)
+    match = PROMPT_INJECTION_REGEX.search(normalize(text))
     if match:
         return GuardrailCheckResult(
             passed=False,

@@ -1,7 +1,21 @@
+import re
+
 from src.config import settings
 from src.guardrails.input.model_registry import get_registry
 from src.schemas.guardrail import GuardrailAction, GuardrailCheckResult
-from src.trainer.model import head_probabilities
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+def segment_probabilities(model: dict, vectorizer, text: str) -> dict[str, float]:
+    """Per-head max P(positive) over the whole text and each of its sentences.
+    TF-IDF L2-normalizes the whole prompt, so benign filler around an attack
+    dilutes its signal; scoring sentences on their own undoes that."""
+    segments = [s for s in _SENTENCE_END.split(text) if s.strip()]
+    texts = [text] + (segments if len(segments) > 1 else [])
+    x = vectorizer.transform(texts)
+    return {head: float(clf.predict_proba(x)[:, 1].max()) for head, clf in model.items()}
 
 
 def _legacy_multiclass(model, vector) -> GuardrailCheckResult:
@@ -32,11 +46,10 @@ def check_ml_classifier(text: str) -> GuardrailCheckResult:
             action=GuardrailAction.ALLOW,
         )
 
-    vector = loaded.vectorizer.transform([text])
     if not isinstance(loaded.model, dict):
-        return _legacy_multiclass(loaded.model, vector)
+        return _legacy_multiclass(loaded.model, loaded.vectorizer.transform([text]))
 
-    heads = head_probabilities(loaded.model, vector)
+    heads = segment_probabilities(loaded.model, loaded.vectorizer, text)
     top_head = max(heads, key=heads.get)
     top_prob = heads[top_head]
     blocked = top_prob >= settings.ML_CLASSIFIER_THRESHOLD

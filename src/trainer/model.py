@@ -21,11 +21,6 @@ class TrainResult:
     n_test: int
 
 
-def head_probabilities(model: dict, vector) -> dict[str, float]:
-    """P(positive) from each head for a single already-vectorized row."""
-    return {head: float(clf.predict_proba(vector)[0][1]) for head, clf in model.items()}
-
-
 def _head_rows(x, labels, head):
     """A head trains on its own positives vs `safe` only. Other attack
     classes are left out rather than labelled negative, since e.g. jailbreak
