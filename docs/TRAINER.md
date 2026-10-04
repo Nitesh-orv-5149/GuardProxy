@@ -129,7 +129,43 @@ rolling back to one works.
 ## Rollback
 
 Edit `models/input_classifier/pointer.json` to point `current_version` at
-an earlier version directory that's still on disk.
+an earlier version directory that's still on disk, or pull any version
+from the Hub (below).
+
+## Model registry (Hugging Face Hub)
+
+Every version lives in the private repo
+[`Kimdokja5149/guardproxy-input-classifier`](https://huggingface.co/Kimdokja5149/guardproxy-input-classifier)
+(`HF_MODEL_REPO`), with its eval and benchmark reports and a model card.
+Needs a write-scoped `HF_TOKEN` in `.env`.
+
+```bash
+python -m src.trainer.hub push                      # active version (+ reports/) -> Hub, becomes "latest"
+python -m src.trainer.hub pull                      # Hub latest -> models/, repoints pointer.json
+python -m src.trainer.hub pull --version v20260924-021022   # rollback from the Hub
+python -m src.trainer.hub list
+```
+
+Release flow: `train` → `evaluate` → `benchmark` → `hub push`. A fresh
+machine or container only needs `hub pull`.
+
+## External benchmarks
+
+`python -m src.trainer.benchmark` scores the active model, ML alone and the
+full guard (regex + ML), on public sets that share nothing with the training
+sources. Score is the PINT leaderboard metric (balanced accuracy), so it
+lines up with published numbers for Lakera Guard, Prompt Guard, etc.
+
+| Benchmark | What |
+|---|---|
+| PINT (Lakera / Check Point) | The industry leaderboard for injection detectors. The full 4,314-prompt set is access-on-request; until then the public 8-prompt example runs. Pass the full set with `--pint-yaml`. |
+| JailbreakBench JBB-Behaviors | 100 harmful vs 100 benign requests. |
+| xTRam1/safe-guard-prompt-injection | ~2.1k-prompt test split of synthetic injections. |
+
+`v20261002-075605` (guard): JBB 0.50 (11% of harmful requests blocked),
+safe-guard 0.65 (35% injection recall, 5.7% FPR). The held-out numbers
+above don't transfer to other data distributions — that gap is the
+main thing to fix.
 
 ## Current model (`v20260924-021022`)
 

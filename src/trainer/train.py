@@ -49,7 +49,7 @@ def _write_pointer(model_dir: Path, version: str) -> None:
 
 def _prune_old_versions(model_dir: Path, keep_versions: int) -> None:
     version_dirs = sorted(
-        (p for p in model_dir.iterdir() if p.is_dir()),
+        (p for p in model_dir.iterdir() if p.is_dir() and p.name.startswith("v")),  # skip hub's .cache
         key=lambda p: p.name,
     )
     for old_dir in version_dirs[:-keep_versions]:

@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     ML_CLASSIFIER_THRESHOLD: float = float(os.getenv("ML_CLASSIFIER_THRESHOLD", "0.5"))
     ML_MIN_MACRO_F1: float = float(os.getenv("ML_MIN_MACRO_F1", "0.75"))
     ML_MIN_EVAL_ACCURACY: float = float(os.getenv("ML_MIN_EVAL_ACCURACY", "0.8"))
+    HF_TOKEN: str = ""
+    HF_MODEL_REPO: str = "Kimdokja5149/guardproxy-input-classifier"
 
     class Config:
         env_file = ".env"
