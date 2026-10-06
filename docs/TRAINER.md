@@ -39,7 +39,7 @@ python -m src.trainer.train --source csv --data-dir data/input_classifier
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--source` | `csv` | `huggingface` loads the three public datasets below; `csv` reads local CSVs. |
+| `--source` | `csv` | `huggingface` loads the public datasets below; `csv` reads local CSVs. |
 | `--data-dir` | `data/input_classifier` | Directory of `*.csv` files (`text,label` columns) — used when `--source csv`. |
 | `--min-macro-f1` | `0.75` (`ML_MIN_MACRO_F1`) | **Every** head's held-out F1 must reach this. |
 | `--min-eval-accuracy` | `0.8` (`ML_MIN_EVAL_ACCURACY`) | Block-decision accuracy required on the hand-written eval set. |
@@ -47,19 +47,27 @@ python -m src.trainer.train --source csv --data-dir data/input_classifier
 
 ### `--source huggingface`
 
-`src/trainer/data/loader.py::HFDatasetSource` loads (both splits of) three
-purpose-built datasets, each of which labels one attack type vs benign, and
-drops duplicate texts:
+`src/trainer/data/loader.py::HFDatasetSource` loads every split of these
+datasets, drops duplicate texts, and `load_training_examples` then removes
+any prompt that appears in a benchmark set. All licenses allow commercial use:
 
 | Dataset | Mapping | License |
 |---|---|---|
 | [`deepset/prompt-injections`](https://huggingface.co/datasets/deepset/prompt-injections) | `label=1` → `prompt_injection`, else `safe` | Apache-2.0 |
 | [`jackhhao/jailbreak-classification`](https://huggingface.co/datasets/jackhhao/jailbreak-classification) | `type=jailbreak` → `jailbreak`, else `safe` | Apache-2.0 |
-| [`lmsys/toxic-chat`](https://huggingface.co/datasets/lmsys/toxic-chat) (`toxicchat0124`) | `jailbreaking=1` → `jailbreak`; `toxicity=1` → `toxic`; else `safe` | **CC-BY-NC-4.0 (non-commercial)** |
+| [`reshabhs/SPML_Chatbot_Prompt_Injection`](https://huggingface.co/datasets/reshabhs/SPML_Chatbot_Prompt_Injection) | user prompt; `Prompt injection=1` → `prompt_injection`, else `safe` | MIT |
+| [`TrustAIRLab/in-the-wild-jailbreak-prompts`](https://huggingface.co/datasets/TrustAIRLab/in-the-wild-jailbreak-prompts) | `jailbreak_2023_12_25` → `jailbreak`; `regular_2023_12_25` → `safe` | MIT |
+| [`nvidia/Aegis-AI-Content-Safety-Dataset-2.0`](https://huggingface.co/datasets/nvidia/Aegis-AI-Content-Safety-Dataset-2.0) | unsafe prompt → `toxic`, else `safe` | CC-BY-4.0 |
+| [`databricks/databricks-dolly-15k`](https://huggingface.co/datasets/databricks/databricks-dolly-15k) | instruction (+ context) → `safe` | CC-BY-SA-3.0 |
+| [`OpenAssistant/oasst2`](https://huggingface.co/datasets/OpenAssistant/oasst2) | first user turns, multilingual → `safe` | Apache-2.0 |
+| [`bench-llm/or-bench`](https://huggingface.co/datasets/bench-llm/or-bench) | `or-bench-80k` (¼ sample, scary-sounding but benign) → `safe`; `or-bench-toxic` → `toxic` | CC-BY-4.0 |
+| [`fka/prompts.chat`](https://huggingface.co/datasets/fka/prompts.chat) | "act as …" role prompts → `safe` | CC0-1.0 |
+| [`hackaprompt/hackaprompt-dataset`](https://huggingface.co/datasets/hackaprompt/hackaprompt-dataset) | `user_input` → `prompt_injection` (sampled, successful attacks preferred) | MIT, **gated**: accept on HF first |
 
-toxic-chat's ~9.5k benign rows are real user prompts, which is what gives
-the `safe` side realistic everyday chat. Its license is non-commercial —
-swap it out before any commercial use.
+`lmsys/toxic-chat` (CC-BY-NC) was dropped in October 2026 to keep the data
+commercial-safe. `allenai/wildjailbreak` is ODC-BY, but its access terms limit
+use to research, so it is deliberately excluded. Gated datasets need the
+`HF_TOKEN` in `.env`, and that account must have accepted the terms.
 
 ### `--source csv`
 
@@ -141,6 +149,7 @@ Needs a write-scoped `HF_TOKEN` in `.env`.
 
 ```bash
 python -m src.trainer.hub push                      # active version (+ reports/) -> Hub, becomes "latest"
+python -m src.trainer.hub push --version vX --candidate   # store a non-shipped version; "latest" unchanged
 python -m src.trainer.hub pull                      # Hub latest -> models/, repoints pointer.json
 python -m src.trainer.hub pull --version v20260924-021022   # rollback from the Hub
 python -m src.trainer.hub list

@@ -12,3 +12,5 @@ pandas>=2.0.0
 datasets>=2.14.0
 huggingface_hub>=0.20.0
 pyyaml>=6.0
+onnxruntime>=1.17.0
+tokenizers>=0.15.0

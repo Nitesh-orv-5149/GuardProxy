@@ -1,0 +1,8 @@
+# GPU training of the transformer classifier only; serving needs requirements.txt alone.
+# CUDA build: pip install torch --index-url https://download.pytorch.org/whl/cu124
+-r requirements.txt
+torch>=2.3.0
+transformers>=4.40.0
+sentencepiece>=0.2.0
+protobuf>=4.25.0
+onnx>=1.16.0

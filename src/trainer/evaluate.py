@@ -32,7 +32,7 @@ from src.guardrails.input.prompt_injection import check_prompt_injection
 from src.guardrails.input.toxic_content import check_toxic_content
 from src.schemas.guardrail import GuardrailAction
 from src.guardrails.input.ml_classifier import segment_probabilities
-from src.trainer.train import EVAL_PROMPTS_PATH, _build_source
+from src.trainer.train import EVAL_PROMPTS_PATH, load_training_examples
 
 REGEX_CHECKS = [check_prompt_injection, check_jailbreak, check_toxic_content]
 
@@ -77,7 +77,7 @@ PERTURBATIONS = {
 def _probs(loaded, texts: list[str]) -> dict[str, np.ndarray]:
     """Scores exactly as check_ml_classifier does (whole text + per sentence)."""
     rows = [segment_probabilities(loaded.model, loaded.vectorizer, t) for t in texts]
-    return {head: np.array([r[head] for r in rows]) for head in loaded.model}
+    return {head: np.array([r[head] for r in rows]) for head in rows[0]}
 
 
 def _ml_blocks(loaded, texts: list[str], threshold: float) -> np.ndarray:
@@ -277,11 +277,11 @@ def main() -> None:
     args = parser.parse_args()
 
     loaded = get_registry().get()
-    if loaded is None or not isinstance(loaded.model, dict):
+    if loaded is None or not (isinstance(loaded.model, dict) or hasattr(loaded.model, "score")):
         raise SystemExit("No active 3-head model found via pointer.json.")
     threshold = settings.ML_CLASSIFIER_THRESHOLD
 
-    examples = _build_source(args.source, args.data_dir).load()
+    examples = load_training_examples(args.source, args.data_dir)
     heldout = heldout_metrics(loaded, examples, threshold)
     if heldout["n_test"] != loaded.metadata.get("n_test"):
         print(f"WARNING: test split size {heldout['n_test']} != trained n_test {loaded.metadata.get('n_test')}; data changed since training, held-out rows may overlap training data.")

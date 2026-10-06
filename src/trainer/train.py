@@ -16,6 +16,7 @@ retrain never silently replaces a good model.
 """
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +39,23 @@ def _build_source(source: str, data_dir: str) -> DatasetSource:
     if source == "huggingface":
         return HFDatasetSource()
     raise ValueError(f"Unknown source '{source}', expected 'csv' or 'huggingface'")
+
+
+def load_training_examples(source: str, data_dir: str) -> list[tuple[str, str]]:
+    """Training rows, with every benchmark prompt removed for the huggingface
+    source so benchmark scores stay honest. Trainers and evaluate.py both
+    use this, so their held-out splits match."""
+    if settings.HF_TOKEN:  # gated datasets (hackaprompt) read it from the environment
+        os.environ.setdefault("HF_TOKEN", settings.HF_TOKEN)
+    examples = _build_source(source, data_dir).load()
+    if source != "huggingface":
+        return examples
+    from src.trainer.benchmark import _norm, benchmark_texts
+
+    banned = benchmark_texts()
+    kept = [(t, l) for t, l in examples if _norm(t) not in banned]
+    print(f"Dropped {len(examples) - len(kept)} training rows that appear in benchmark sets.")
+    return kept
 
 
 def _write_pointer(model_dir: Path, version: str) -> None:
@@ -82,8 +100,7 @@ def train(
     model_dir = Path(settings.ML_MODEL_DIR)
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    dataset_source = _build_source(source, data_dir)
-    examples = dataset_source.load()
+    examples = load_training_examples(source, data_dir)
     label_counts = {l: sum(1 for _, x in examples if x == l) for l in LABEL_CLASSES}
     print(f"Loaded {len(examples)} labeled examples from source={source}: {label_counts}")
 

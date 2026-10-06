@@ -9,6 +9,8 @@ Benchmarks (none overlap the training sources in src.trainer.data.loader):
                4,314-prompt PINT set is access-on-request, pass it via --pint-yaml.
   - jbb:       JailbreakBench JBB-Behaviors (100 harmful vs 100 benign requests).
   - safeguard: xTRam1/safe-guard-prompt-injection test split (~2.1k prompts).
+  - gandalf:   Lakera gandalf_ignore_instructions (1k real injections, recall only).
+  - xstest:    XSTest (250 safe-but-scary-sounding prompts vs 200 unsafe): over-blocking.
 
 Every benchmark is scored the way PINT scores its leaderboard: accuracy per
 label (attack / benign), averaged, so the published PINT numbers for Lakera
@@ -67,27 +69,56 @@ def load_safeguard() -> tuple[list[str], np.ndarray, list[str]]:
     return list(ds["text"]), labels, ["prompt_injection" if l else "benign" for l in labels]
 
 
+def load_gandalf() -> tuple[list[str], np.ndarray, list[str]]:
+    from datasets import load_dataset
+
+    texts = [r["text"] for split in load_dataset("Lakera/gandalf_ignore_instructions").values() for r in split]
+    return texts, np.ones(len(texts), dtype=bool), ["prompt_injection"] * len(texts)
+
+
+def load_xstest() -> tuple[list[str], np.ndarray, list[str]]:
+    from datasets import load_dataset
+
+    ds = load_dataset("Paul/XSTest", split="train")
+    return list(ds["prompt"]), np.array([l == "unsafe" for l in ds["label"]]), [f"{l}/{t}" for l, t in zip(ds["label"], ds["type"])]
+
+
+LOADERS = {"jbb": load_jbb, "safeguard": load_safeguard, "gandalf": load_gandalf, "xstest": load_xstest}
+
+
+def _norm(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def benchmark_texts() -> set[str]:
+    """Normalized text of every benchmark prompt, so trainers can keep them out of training data."""
+    texts = load_pint(None)[0]
+    for load in LOADERS.values():
+        texts += load()[0]
+    return {_norm(t) for t in texts}
+
+
 def score(pred: np.ndarray, labels: np.ndarray, cats: list[str]) -> dict:
     cats = np.array(cats)
     attack_acc = float(pred[labels].mean())
-    benign_acc = float((~pred[~labels]).mean())
+    # Attack-only sets (gandalf) have no benign rows: score is plain recall.
+    benign_acc = float((~pred[~labels]).mean()) if (~labels).any() else None
     return {
-        "score": round((attack_acc + benign_acc) / 2, 4),  # PINT "balanced" score
+        "score": round((attack_acc + benign_acc) / 2 if benign_acc is not None else attack_acc, 4),  # PINT "balanced" score
         "attack_recall": round(attack_acc, 4),
-        "false_positive_rate": round(1 - benign_acc, 4),
+        "false_positive_rate": round(1 - benign_acc, 4) if benign_acc is not None else None,
         "by_category": {str(c): round(float((pred[cats == c] == labels[cats == c]).mean()), 4) for c in sorted(set(cats))},
     }
 
 
-def run(pint_yaml: str | None) -> dict:
-    loaded = get_registry().get()
-    if loaded is None or not isinstance(loaded.model, dict):
+def run(pint_yaml: str | None, version: str | None = None) -> dict:
+    loaded = get_registry().get(version)
+    if loaded is None or not (isinstance(loaded.model, dict) or hasattr(loaded.model, "score")):
         raise SystemExit("No active 3-head model found via pointer.json.")
     threshold = settings.ML_CLASSIFIER_THRESHOLD
     benchmarks = {
         "pint" if pint_yaml else "pint_example": load_pint(pint_yaml),
-        "jbb": load_jbb(),
-        "safeguard": load_safeguard(),
+        **{name: load() for name, load in LOADERS.items()},
     }
     results = {}
     for name, (texts, labels, cats) in benchmarks.items():
@@ -124,10 +155,11 @@ def markdown(r: dict) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Score the active input guard on external benchmarks.")
     parser.add_argument("--pint-yaml", help="Full PINT dataset YAML (access on request from Lakera/Check Point).")
+    parser.add_argument("--version", help="Benchmark this version instead of the active one.")
     parser.add_argument("--out", default="reports")
     args = parser.parse_args()
 
-    report = run(args.pint_yaml)
+    report = run(args.pint_yaml, args.version)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / f"benchmark-{report['version']}.json").write_text(json.dumps(report, indent=2))

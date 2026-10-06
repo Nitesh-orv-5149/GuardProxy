@@ -1,7 +1,8 @@
 """Hugging Face Hub as the model registry for the input classifier.
 
 Usage:
-    python -m src.trainer.hub push [--version vX]   # upload a local version (default: the active one)
+    python -m src.trainer.hub push [--version vX] [--candidate]   # upload a local version (default: the active one);
+                                                                 # --candidate keeps the Hub's latest unchanged
     python -m src.trainer.hub pull [--version vX]   # download a version (default: hub latest) and activate it
     python -m src.trainer.hub list
 
@@ -59,7 +60,7 @@ def _card(version: str, metadata: dict, bench: dict | None) -> str:
     return "\n".join(lines) + "\n"
 
 
-def push(version: str | None) -> None:
+def push(version: str | None, candidate: bool = False) -> None:
     api = _api()
     version = version or _active_version()
     vdir = MODEL_DIR / version
@@ -76,6 +77,9 @@ def push(version: str | None) -> None:
                             path_in_repo=f"{version}/{kind}.json", commit_message=f"{kind} report for {version}")
             if kind == "benchmark":
                 bench = json.loads(report.read_text())
+    if candidate:  # stored for comparison/rollback, but "latest" and the model card stay put
+        print(f"Pushed candidate {version} -> https://huggingface.co/{settings.HF_MODEL_REPO}")
+        return
     api.upload_file(repo_id=settings.HF_MODEL_REPO, path_in_repo="pointer.json",
                     path_or_fileobj=json.dumps({"current_version": version}, indent=2).encode(),
                     commit_message=f"Point latest at {version}")
@@ -90,8 +94,9 @@ def pull(version: str | None) -> None:
     if version is None:
         path = api.hf_hub_download(settings.HF_MODEL_REPO, "pointer.json")
         version = json.loads(Path(path).read_text())["current_version"]
+    # Whole version folder: joblib files for TF-IDF versions, model.onnx + tokenizer.json for transformers.
     snapshot_download(settings.HF_MODEL_REPO, token=settings.HF_TOKEN, local_dir=MODEL_DIR,
-                      allow_patterns=[f"{version}/model.joblib", f"{version}/vectorizer.joblib", f"{version}/metadata.json"])
+                      allow_patterns=[f"{version}/*"])
     _write_pointer(MODEL_DIR, version)
     print(f"Pulled {version}; it is now the active input classifier.")
 
@@ -106,8 +111,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Sync input classifier versions with the Hugging Face Hub.")
     parser.add_argument("command", choices=["push", "pull", "list"])
     parser.add_argument("--version")
+    parser.add_argument("--candidate", action="store_true",
+                        help="push: upload without making it the Hub's latest or rewriting the model card")
     args = parser.parse_args()
-    {"push": lambda: push(args.version), "pull": lambda: pull(args.version), "list": list_versions}[args.command]()
+    {"push": lambda: push(args.version, args.candidate), "pull": lambda: pull(args.version), "list": list_versions}[args.command]()
 
 
 if __name__ == "__main__":

@@ -11,7 +11,10 @@ _SENTENCE_END = re.compile(r"(?<=[.!?])\s+|\n+")
 def segment_probabilities(model: dict, vectorizer, text: str) -> dict[str, float]:
     """Per-head max P(positive) over the whole text and each of its sentences.
     TF-IDF L2-normalizes the whole prompt, so benign filler around an attack
-    dilutes its signal; scoring sentences on their own undoes that."""
+    dilutes its signal; scoring sentences on their own undoes that.
+    Transformer models read the whole prompt in context and score themselves."""
+    if hasattr(model, "score"):
+        return model.score(text)
     segments = [s for s in _SENTENCE_END.split(text) if s.strip()]
     texts = [text] + (segments if len(segments) > 1 else [])
     x = vectorizer.transform(texts)
@@ -46,7 +49,7 @@ def check_ml_classifier(text: str) -> GuardrailCheckResult:
             action=GuardrailAction.ALLOW,
         )
 
-    if not isinstance(loaded.model, dict):
+    if not isinstance(loaded.model, dict) and not hasattr(loaded.model, "score"):
         return _legacy_multiclass(loaded.model, loaded.vectorizer.transform([text]))
 
     heads = segment_probabilities(loaded.model, loaded.vectorizer, text)

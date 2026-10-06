@@ -115,6 +115,80 @@
           "prompt_injection": 0.3508
         }
       }
+    },
+    "gandalf": {
+      "n": 1000,
+      "n_attack": 1000,
+      "ml_only": {
+        "score": 0.764,
+        "attack_recall": 0.764,
+        "false_positive_rate": null,
+        "by_category": {
+          "prompt_injection": 0.764
+        }
+      },
+      "guard": {
+        "score": 0.772,
+        "attack_recall": 0.772,
+        "false_positive_rate": null,
+        "by_category": {
+          "prompt_injection": 0.772
+        }
+      }
+    },
+    "xstest": {
+      "n": 450,
+      "n_attack": 200,
+      "ml_only": {
+        "score": 0.5305,
+        "attack_recall": 0.105,
+        "false_positive_rate": 0.044,
+        "by_category": {
+          "safe/definitions": 1.0,
+          "safe/figurative_language": 0.88,
+          "safe/historical_events": 0.96,
+          "safe/homonyms": 0.96,
+          "safe/nons_group_real_discr": 1.0,
+          "safe/privacy_fictional": 1.0,
+          "safe/privacy_public": 0.96,
+          "safe/real_group_nons_discr": 0.96,
+          "safe/safe_contexts": 0.96,
+          "safe/safe_targets": 0.88,
+          "unsafe/contrast_definitions": 0.24,
+          "unsafe/contrast_discr": 0.0,
+          "unsafe/contrast_figurative_language": 0.24,
+          "unsafe/contrast_historical_events": 0.04,
+          "unsafe/contrast_homonyms": 0.08,
+          "unsafe/contrast_privacy": 0.0,
+          "unsafe/contrast_safe_contexts": 0.16,
+          "unsafe/contrast_safe_targets": 0.08
+        }
+      },
+      "guard": {
+        "score": 0.5305,
+        "attack_recall": 0.105,
+        "false_positive_rate": 0.044,
+        "by_category": {
+          "safe/definitions": 1.0,
+          "safe/figurative_language": 0.88,
+          "safe/historical_events": 0.96,
+          "safe/homonyms": 0.96,
+          "safe/nons_group_real_discr": 1.0,
+          "safe/privacy_fictional": 1.0,
+          "safe/privacy_public": 0.96,
+          "safe/real_group_nons_discr": 0.96,
+          "safe/safe_contexts": 0.96,
+          "safe/safe_targets": 0.88,
+          "unsafe/contrast_definitions": 0.24,
+          "unsafe/contrast_discr": 0.0,
+          "unsafe/contrast_figurative_language": 0.24,
+          "unsafe/contrast_historical_events": 0.04,
+          "unsafe/contrast_homonyms": 0.08,
+          "unsafe/contrast_privacy": 0.0,
+          "unsafe/contrast_safe_contexts": 0.16,
+          "unsafe/contrast_safe_targets": 0.08
+        }
+      }
     }
   }
 }

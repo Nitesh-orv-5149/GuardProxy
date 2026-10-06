@@ -35,8 +35,9 @@ class ModelRegistry:
             return None
         return data.get("current_version")
 
-    def get(self) -> Optional[LoadedModel]:
-        version = self._read_pointer_version()
+    def get(self, version: Optional[str] = None) -> Optional[LoadedModel]:
+        """The pointer's version, or a pinned one (benchmarking a candidate before shipping it)."""
+        version = version or self._read_pointer_version()
         if version is None:
             self._loaded = None
             return None
@@ -45,10 +46,15 @@ class ModelRegistry:
 
         version_dir = self.model_dir / version
         try:
-            model = joblib.load(version_dir / "model.joblib")
-            vectorizer = joblib.load(version_dir / "vectorizer.joblib")
             metadata = json.loads((version_dir / "metadata.json").read_text())
-        except (OSError, ValueError):
+            if metadata.get("kind") == "transformer":
+                from src.guardrails.input.transformer_model import TransformerHeads
+
+                model, vectorizer = TransformerHeads(version_dir, metadata["heads"], metadata["max_len"]), None
+            else:
+                model = joblib.load(version_dir / "model.joblib")
+                vectorizer = joblib.load(version_dir / "vectorizer.joblib")
+        except Exception:  # noqa: BLE001 - onnxruntime raises its own error types
             # Keep serving the previously loaded model if the new version
             # can't be read (e.g. still being written to disk).
             return self._loaded
