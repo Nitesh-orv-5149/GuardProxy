@@ -61,8 +61,21 @@ def _map_wild_jailbreak(row: dict):
     return row["prompt"], "jailbreak"
 
 
+# ~15% of in-the-wild "regular" prompts are jailbreak-style ("forget all previous
+# instructions", DAN rules, "exception to AI ethical protocols"). Labelled safe they
+# outnumbered the whole jailbreak class, so rows matching this are dropped from
+# the `safe` sources (not relabelled: many are roleplay, not jailbreaks).
+_JAILBREAKY = re.compile(
+    r"\b(DAN|jailbreak|jailbroken|developer mode|do anything now|unfiltered|uncensored|amoral|immoral"
+    r"|stay in character|never refuse|no (?:restrictions|limitations|filters|rules|guidelines|ethics)"
+    r"|(?:ignore|forget|disregard) (?:all|any|your|previous|prior)"
+    r"|without (?:any )?(?:restrictions|censorship|filters)|openai'?s? (?:policy|policies|content))\b",
+    re.IGNORECASE,
+)
+
+
 def _map_wild_regular(row: dict):
-    return row["prompt"], "safe"
+    return None if _JAILBREAKY.search(row["prompt"] or "") else (row["prompt"], "safe")
 
 
 def _map_aegis(row: dict):
@@ -93,7 +106,8 @@ def _map_orbench_toxic(row: dict):
 
 
 def _map_prompts_chat(row: dict):
-    return row["prompt"], "safe"  # benign "act as ..." role prompts, jailbreak look-alikes
+    # benign "act as ..." role prompts (jailbreak look-alikes), minus the ~1% that are jailbreak-style
+    return None if _JAILBREAKY.search(row["prompt"] or "") else (row["prompt"], "safe")
 
 
 # Real-world goals swapped in for HackAPrompt's fixed target phrase, so the
@@ -121,6 +135,37 @@ def _map_hackaprompt(row: dict):
     return _PWNED.sub(_PAYLOADS[h % len(_PAYLOADS)], text), "prompt_injection"
 
 
+def _sample(text: str, one_in: int) -> bool:
+    return zlib.crc32(text.encode()) % one_in == 0
+
+
+# Rows these sources took from AdvBench (JailbreakBench is built on it) or from
+# non-commercial sets (ToxicChat, BeaverTails) are dropped.
+_EXCLUDED_ORIGINS = {"Advbench", "AdvBench", "ToxicChat", "BeaverTails", "LLM Jailbreak Study"}
+
+
+def _map_salad_base(row: dict):
+    # 21k harmful questions incl. 2k misinformation; 1/2 sample keeps `toxic` from swamping.
+    if row["source"] in _EXCLUDED_ORIGINS or not _sample(row["question"], 2):
+        return None
+    return row["question"], "toxic"
+
+
+def _map_salad_attack(row: dict):
+    return row["augq"], "jailbreak"  # harmful question wrapped by a jailbreak method (DAN, AutoDAN, TAP, GCG...)
+
+
+def _map_jailbreakv(row: dict):
+    # Text-only attack formats; the 18k "Template" rows reuse a few hundred
+    # templates, so they're sampled 1/4 to avoid memorising them.
+    fmt, text = row["format"], row["jailbreak_query"]
+    if fmt not in ("Template", "Persuade", "Logic") or row["from"] in _EXCLUDED_ORIGINS:
+        return None
+    if fmt == "Template" and not _sample(text, 4):
+        return None
+    return text, "jailbreak"
+
+
 class HFDatasetSource(DatasetSource):
     """Commercial-use-safe public datasets from the HuggingFace Hub, each
     mapped to our labels (safe / prompt_injection / jailbreak / toxic):
@@ -135,6 +180,9 @@ class HFDatasetSource(DatasetSource):
     - bench-llm/or-bench (CC-BY-4.0): 80k scary-sounding benign (1/4 sample) -> safe, toxic subset -> toxic
     - fka/prompts.chat (CC0-1.0): "act as ..." role prompts -> safe
     - hackaprompt/hackaprompt-dataset (MIT, gated): competition injection attempts -> prompt_injection
+    - OpenSafetyLab/Salad-Data (Apache-2.0): harmful questions -> toxic; jailbreak-wrapped ones -> jailbreak
+    - JailbreakV-28K/JailBreakV-28k (MIT): text jailbreaks (template/persuade/logic) -> jailbreak
+      (rows sourced from AdvBench, ToxicChat or BeaverTails are dropped)
 
     No non-commercial (NC) data. allenai/wildjailbreak is deliberately excluded:
     its access terms restrict use to research. Benchmark sets (src.trainer.benchmark) are
@@ -155,6 +203,9 @@ class HFDatasetSource(DatasetSource):
         ("bench-llm/or-bench", "or-bench-toxic", _map_orbench_toxic),
         ("fka/prompts.chat", None, _map_prompts_chat),
         ("hackaprompt/hackaprompt-dataset", None, _map_hackaprompt),  # gated: accept terms on HF first
+        ("OpenSafetyLab/Salad-Data", "base_set", _map_salad_base),
+        ("OpenSafetyLab/Salad-Data", "attack_enhanced_set", _map_salad_attack),
+        ("JailbreakV-28K/JailBreakV-28k", "JailBreakV_28K", _map_jailbreakv),
     ]
 
     def load(self) -> list[tuple[str, str]]:

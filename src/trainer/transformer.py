@@ -78,6 +78,19 @@ def _predict(model, enc_ids, pad_id, device, batch_size=64) -> np.ndarray:
     return out
 
 
+def _tune_thresholds(probs: np.ndarray, labels: list[str]) -> dict[str, float]:
+    """Per-head threshold maximising F1 (head vs safe) on the validation slice.
+    Class weighting in the loss inflates probabilities, so 0.5 over-blocks."""
+    labels = np.array(labels)
+    grid = np.round(np.arange(0.05, 0.96, 0.01), 2)
+    tuned = {}
+    for i, h in enumerate(HEADS):
+        keep = np.isin(labels, [h, "safe"])
+        y, p = labels[keep] == h, probs[keep, i]
+        tuned[h] = float(max(grid, key=lambda t: f1_score(y, p >= t, zero_division=0)))
+    return tuned
+
+
 class _LogitsOnly(torch.nn.Module):
     def __init__(self, model):
         super().__init__()
@@ -109,8 +122,8 @@ def _eval_set_accuracy(heads: TransformerHeads, threshold: float) -> tuple[float
 
 
 def train(args) -> int:
-    torch.manual_seed(0)
-    rng = random.Random(0)
+    torch.manual_seed(args.seed)
+    rng = random.Random(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device={device}")
 
@@ -121,9 +134,12 @@ def train(args) -> int:
     print(f"{len(examples)} examples: {counts}")
     # Must match evaluate.heldout_metrics's split.
     x_tr, x_te, y_tr, y_te = train_test_split(texts, labels, test_size=0.2, random_state=42, stratify=labels)
+    # Validation slice for threshold tuning, so the held-out test stays untouched.
+    x_tr, x_val, y_tr, y_val = train_test_split(x_tr, y_tr, test_size=0.1, random_state=42, stratify=y_tr)
 
     tok = AutoTokenizer.from_pretrained(args.base)
     enc_tr = tok(x_tr, truncation=True, max_length=args.max_len)["input_ids"]
+    enc_val = tok(x_val, truncation=True, max_length=args.max_len)["input_ids"]
     enc_te = tok(x_te, truncation=True, max_length=args.max_len)["input_ids"]
     t_tr, m_tr = _targets(y_tr)
     t_te, _ = _targets(y_te)
@@ -163,13 +179,18 @@ def train(args) -> int:
             if step % 200 == 0:
                 print(f"epoch {epoch} step {step}/{steps} loss {loss.item():.4f} ({time.time() - start:.0f}s)", flush=True)
 
+    thresholds = _tune_thresholds(_predict(model, enc_val, tok.pad_token_id, device), y_val)
+    logit_bias = {h: float(np.log(t / (1 - t))) for h, t in thresholds.items()}
+    print(f"tuned thresholds (validation slice): {thresholds}")
+
     probs = _predict(model, enc_te, tok.pad_token_id, device)
     y_te_arr = np.array(y_te)
+    hit = np.column_stack([probs[:, i] >= thresholds[h] for i, h in enumerate(HEADS)])
     per_head_f1 = {}
     for i, h in enumerate(HEADS):
         keep = np.isin(y_te_arr, [h, "safe"])
-        per_head_f1[h] = float(f1_score(t_te[keep, i], probs[keep, i] >= settings.ML_CLASSIFIER_THRESHOLD, zero_division=0))
-    blocked = probs.max(axis=1) >= settings.ML_CLASSIFIER_THRESHOLD
+        per_head_f1[h] = float(f1_score(t_te[keep, i], hit[keep, i], zero_division=0))
+    blocked = hit.any(axis=1)
     accuracy = float((blocked == (y_te_arr != "safe")).mean())
     print(f"held-out block accuracy={accuracy:.4f} per-head F1={per_head_f1}")
 
@@ -180,7 +201,7 @@ def train(args) -> int:
     _export_onnx(model, version_dir / "model.onnx")
     tok.backend_tokenizer.save(str(version_dir / "tokenizer.json"))
 
-    heads = TransformerHeads(version_dir, HEADS, args.max_len)
+    heads = TransformerHeads(version_dir, HEADS, args.max_len, logit_bias)
     eval_acc, misses = _eval_set_accuracy(heads, settings.ML_CLASSIFIER_THRESHOLD)
     print(f"eval set block accuracy={eval_acc:.3f}")
     for miss in misses:
@@ -188,9 +209,10 @@ def train(args) -> int:
 
     metadata = {
         "version": version, "kind": "transformer", "base_model": args.base, "heads": HEADS, "max_len": args.max_len,
+        "thresholds": thresholds, "logit_bias": logit_bias,
         "trained_at": datetime.now(timezone.utc).isoformat(), "source": "huggingface",
         "n_examples_loaded": len(examples), "label_counts": counts,
-        "hyperparams": {"epochs": args.epochs, "batch_size": args.batch_size, "lr": args.lr},
+        "hyperparams": {"epochs": args.epochs, "batch_size": args.batch_size, "lr": args.lr, "seed": args.seed},
         "accuracy": accuracy, "macro_f1": sum(per_head_f1.values()) / len(per_head_f1), "per_class_f1": per_head_f1,
         "eval_block_accuracy": eval_acc, "eval_misses": misses,
         "n_train": len(x_tr), "n_test": len(x_te), "sklearn_version": "n/a (transformer)",
@@ -215,6 +237,7 @@ def main() -> None:
     p.add_argument("--max-len", type=int, default=256)
     p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--lr", type=float, default=3e-5)
+    p.add_argument("--seed", type=int, default=0, help="Init/shuffle seed (data split is fixed); vary it to measure run-to-run noise.")
     p.add_argument("--min-f1", type=float, default=settings.ML_MIN_MACRO_F1)
     p.add_argument("--min-eval-accuracy", type=float, default=settings.ML_MIN_EVAL_ACCURACY)
     p.add_argument("--keep-versions", type=int, default=8)

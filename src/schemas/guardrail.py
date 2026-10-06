@@ -13,6 +13,7 @@ class GuardrailAction(str, Enum):
     ALLOW = "allow"
     BLOCK = "block"
     MODIFY = "modify"
+    FLAG = "flag"  # allow, but report (conversation monitor)
 
 class GuardrailCheckResult(BaseModel):
     passed: bool = Field(..., description="Whether the guardrail check passed")

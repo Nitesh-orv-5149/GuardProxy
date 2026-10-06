@@ -50,7 +50,7 @@ class ModelRegistry:
             if metadata.get("kind") == "transformer":
                 from src.guardrails.input.transformer_model import TransformerHeads
 
-                model, vectorizer = TransformerHeads(version_dir, metadata["heads"], metadata["max_len"]), None
+                model, vectorizer = TransformerHeads(version_dir, metadata["heads"], metadata["max_len"], metadata.get("logit_bias")), None
             else:
                 model = joblib.load(version_dir / "model.joblib")
                 vectorizer = joblib.load(version_dir / "vectorizer.joblib")

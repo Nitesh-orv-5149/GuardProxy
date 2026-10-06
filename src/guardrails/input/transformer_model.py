@@ -1,7 +1,8 @@
 """CPU inference for the fine-tuned transformer input classifier (ONNX).
 
 Artifact (written by src.trainer.transformer): model.onnx, tokenizer.json,
-metadata.json with kind="transformer", heads and max_len. Only onnxruntime
+metadata.json with kind="transformer", heads, max_len and optional per-head
+logit_bias (calibration: subtracting it makes 0.5 the tuned threshold). Only onnxruntime
 and tokenizers are needed at serve time, no torch.
 """
 from pathlib import Path
@@ -12,7 +13,7 @@ MAX_WINDOWS = 8  # ponytail: caps cost on huge prompts; text past 8 windows (~1.
 
 
 class TransformerHeads:
-    def __init__(self, version_dir: Path, heads: list[str], max_len: int):
+    def __init__(self, version_dir: Path, heads: list[str], max_len: int, logit_bias: dict | None = None):
         import onnxruntime as ort
         from tokenizers import Tokenizer
 
@@ -24,6 +25,7 @@ class TransformerHeads:
         self.tokenizer.no_padding()
         self.heads = heads
         self.max_len = max_len
+        self.bias = np.array([(logit_bias or {}).get(h, 0.0) for h in heads], dtype=np.float32)
 
     def _windows(self, text: str) -> list[list[int]]:
         """Long prompts are split into overlapping windows so an injection
@@ -46,5 +48,5 @@ class TransformerHeads:
             ids[i, :len(w)] = w
             mask[i, :len(w)] = 1
         logits = self.session.run(None, {"input_ids": ids, "attention_mask": mask})[0]
-        probs = 1 / (1 + np.exp(-logits))
+        probs = 1 / (1 + np.exp(-(logits - self.bias)))
         return {h: float(probs[:, i].max()) for i, h in enumerate(self.heads)}

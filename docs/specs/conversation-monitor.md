@@ -1,6 +1,18 @@
 # Conversation Monitor — multi-turn breach detection
 
-**Status:** draft · **Owner:** Nitesh Kumar · **Date:** 2026-10-05 · **v1 response:** flag only
+**Status:** v1 (P0) implemented 2026-10-06 (`src/guardrails/conversation.py`, `/chat` in `src/main.py`) · **Owner:** Nitesh Kumar · **Date:** 2026-10-05 · **v1 response:** flag only
+
+> **First measurements (2026-10-06), from 200 English oasst2 threads (3 user turns on average) and 171 Gandalf injections split over 3 turns after a harmless opener:**
+>
+> | | TF-IDF (live) | Transformer run 6 |
+> |---|---|---|
+> | False flags on harmless threads | 1.5% | 0.5% |
+> | Split attacks missed per-turn, then flagged by the monitor | 0 / 21 | 4 / 13 |
+> | Monitor latency, p95 (window scored serially) | 2.5–4 ms | 25–84 ms |
+>
+> - Most split attacks still have one fragment blocked per-turn (88–92%). Most ledger flags come from repeated blocked turns.
+> - The transformer misses the 15 ms budget on CPU: one 256-token window is ~30–40 ms. In the server the window runs alongside the per-turn check, so it adds wall time only when it's the slower of the two.
+> - Crescendo-style attacks aren't measured yet; that needs generated conversations from PyRIT or promptfoo.
 
 Every GuardProxy check judges one prompt in isolation. The Conversation
 Monitor tracks each conversation across turns and **flags** (never blocks,

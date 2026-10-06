@@ -50,11 +50,18 @@ def load_training_examples(source: str, data_dir: str) -> list[tuple[str, str]]:
     examples = _build_source(source, data_dir).load()
     if source != "huggingface":
         return examples
-    from src.trainer.benchmark import _norm, benchmark_texts
+    from src.trainer.benchmark import _norm, benchmark_texts, load_jbb
 
     banned = benchmark_texts()
-    kept = [(t, l) for t, l in examples if _norm(t) not in banned]
-    print(f"Dropped {len(examples) - len(kept)} training rows that appear in benchmark sets.")
+    # JailbreakBench goals are short requests that jailbreak templates embed
+    # verbatim, so also drop any row that contains one.
+    goals = [_norm(g) for g in load_jbb()[0]]
+    kept = []
+    for t, l in examples:
+        n = _norm(t)
+        if n not in banned and not any(g in n for g in goals):
+            kept.append((t, l))
+    print(f"Dropped {len(examples) - len(kept)} training rows that appear in (or embed) benchmark prompts.")
     return kept
 
 

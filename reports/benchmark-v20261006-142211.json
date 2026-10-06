@@ -1,0 +1,194 @@
+{
+  "version": "v20261006-142211",
+  "threshold": 0.5,
+  "benchmarks": {
+    "pint_example": {
+      "n": 8,
+      "n_attack": 2,
+      "ml_only": {
+        "score": 1.0,
+        "attack_recall": 1.0,
+        "false_positive_rate": 0.0,
+        "by_category": {
+          "benign_input": 1.0,
+          "chat": 1.0,
+          "documents": 1.0,
+          "hard_negatives": 1.0,
+          "jailbreak": 1.0,
+          "long_input": 1.0,
+          "prompt_injection": 1.0,
+          "short_input": 1.0
+        }
+      },
+      "guard": {
+        "score": 1.0,
+        "attack_recall": 1.0,
+        "false_positive_rate": 0.0,
+        "by_category": {
+          "benign_input": 1.0,
+          "chat": 1.0,
+          "documents": 1.0,
+          "hard_negatives": 1.0,
+          "jailbreak": 1.0,
+          "long_input": 1.0,
+          "prompt_injection": 1.0,
+          "short_input": 1.0
+        }
+      }
+    },
+    "jbb": {
+      "n": 200,
+      "n_attack": 100,
+      "ml_only": {
+        "score": 0.755,
+        "attack_recall": 0.89,
+        "false_positive_rate": 0.38,
+        "by_category": {
+          "benign/Disinformation": 0.7,
+          "benign/Economic harm": 0.7,
+          "benign/Expert advice": 0.6,
+          "benign/Fraud/Deception": 0.7,
+          "benign/Government decision-making": 0.6,
+          "benign/Harassment/Discrimination": 0.8,
+          "benign/Malware/Hacking": 0.6,
+          "benign/Physical harm": 0.7,
+          "benign/Privacy": 0.3,
+          "benign/Sexual/Adult content": 0.5,
+          "harmful/Disinformation": 0.7,
+          "harmful/Economic harm": 0.9,
+          "harmful/Expert advice": 0.7,
+          "harmful/Fraud/Deception": 0.9,
+          "harmful/Government decision-making": 0.9,
+          "harmful/Harassment/Discrimination": 1.0,
+          "harmful/Malware/Hacking": 1.0,
+          "harmful/Physical harm": 0.8,
+          "harmful/Privacy": 1.0,
+          "harmful/Sexual/Adult content": 1.0
+        }
+      },
+      "guard": {
+        "score": 0.755,
+        "attack_recall": 0.89,
+        "false_positive_rate": 0.38,
+        "by_category": {
+          "benign/Disinformation": 0.7,
+          "benign/Economic harm": 0.7,
+          "benign/Expert advice": 0.6,
+          "benign/Fraud/Deception": 0.7,
+          "benign/Government decision-making": 0.6,
+          "benign/Harassment/Discrimination": 0.8,
+          "benign/Malware/Hacking": 0.6,
+          "benign/Physical harm": 0.7,
+          "benign/Privacy": 0.3,
+          "benign/Sexual/Adult content": 0.5,
+          "harmful/Disinformation": 0.7,
+          "harmful/Economic harm": 0.9,
+          "harmful/Expert advice": 0.7,
+          "harmful/Fraud/Deception": 0.9,
+          "harmful/Government decision-making": 0.9,
+          "harmful/Harassment/Discrimination": 1.0,
+          "harmful/Malware/Hacking": 1.0,
+          "harmful/Physical harm": 0.8,
+          "harmful/Privacy": 1.0,
+          "harmful/Sexual/Adult content": 1.0
+        }
+      }
+    },
+    "safeguard": {
+      "n": 2060,
+      "n_attack": 650,
+      "ml_only": {
+        "score": 0.8774,
+        "attack_recall": 0.7938,
+        "false_positive_rate": 0.039,
+        "by_category": {
+          "benign": 0.961,
+          "prompt_injection": 0.7938
+        }
+      },
+      "guard": {
+        "score": 0.8783,
+        "attack_recall": 0.7985,
+        "false_positive_rate": 0.0418,
+        "by_category": {
+          "benign": 0.9582,
+          "prompt_injection": 0.7985
+        }
+      }
+    },
+    "gandalf": {
+      "n": 1000,
+      "n_attack": 1000,
+      "ml_only": {
+        "score": 0.91,
+        "attack_recall": 0.91,
+        "false_positive_rate": null,
+        "by_category": {
+          "prompt_injection": 0.91
+        }
+      },
+      "guard": {
+        "score": 0.911,
+        "attack_recall": 0.911,
+        "false_positive_rate": null,
+        "by_category": {
+          "prompt_injection": 0.911
+        }
+      }
+    },
+    "xstest": {
+      "n": 450,
+      "n_attack": 200,
+      "ml_only": {
+        "score": 0.732,
+        "attack_recall": 0.94,
+        "false_positive_rate": 0.476,
+        "by_category": {
+          "safe/definitions": 0.64,
+          "safe/figurative_language": 0.24,
+          "safe/historical_events": 0.68,
+          "safe/homonyms": 0.68,
+          "safe/nons_group_real_discr": 0.88,
+          "safe/privacy_fictional": 0.4,
+          "safe/privacy_public": 0.64,
+          "safe/real_group_nons_discr": 0.32,
+          "safe/safe_contexts": 0.28,
+          "safe/safe_targets": 0.48,
+          "unsafe/contrast_definitions": 1.0,
+          "unsafe/contrast_discr": 0.84,
+          "unsafe/contrast_figurative_language": 1.0,
+          "unsafe/contrast_historical_events": 0.92,
+          "unsafe/contrast_homonyms": 1.0,
+          "unsafe/contrast_privacy": 0.76,
+          "unsafe/contrast_safe_contexts": 1.0,
+          "unsafe/contrast_safe_targets": 1.0
+        }
+      },
+      "guard": {
+        "score": 0.732,
+        "attack_recall": 0.94,
+        "false_positive_rate": 0.476,
+        "by_category": {
+          "safe/definitions": 0.64,
+          "safe/figurative_language": 0.24,
+          "safe/historical_events": 0.68,
+          "safe/homonyms": 0.68,
+          "safe/nons_group_real_discr": 0.88,
+          "safe/privacy_fictional": 0.4,
+          "safe/privacy_public": 0.64,
+          "safe/real_group_nons_discr": 0.32,
+          "safe/safe_contexts": 0.28,
+          "safe/safe_targets": 0.48,
+          "unsafe/contrast_definitions": 1.0,
+          "unsafe/contrast_discr": 0.84,
+          "unsafe/contrast_figurative_language": 1.0,
+          "unsafe/contrast_historical_events": 0.92,
+          "unsafe/contrast_homonyms": 1.0,
+          "unsafe/contrast_privacy": 0.76,
+          "unsafe/contrast_safe_contexts": 1.0,
+          "unsafe/contrast_safe_targets": 1.0
+        }
+      }
+    }
+  }
+}

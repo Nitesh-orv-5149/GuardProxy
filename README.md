@@ -67,4 +67,21 @@ curl -X POST "http://localhost:8000/chat" \
      -d '{"prompt": "Hello, world!"}'
 ```
 
+For multi-turn chats, send `messages` (OpenAI-style, ending with a `user` turn) and a `conversation_id`. The upstream call becomes Ollama `/api/chat`:
+
+```bash
+curl -X POST "http://localhost:8000/chat" \
+     -H "Content-Type: application/json" \
+     -d '{"conversation_id": "c-123", "messages": [{"role": "user", "content": "Hi!"}]}'
+```
+
+With a `conversation_id`, the **conversation monitor** also runs. Its results come back as `conversation_risk`:
+- `score`: a running risk score where older turns decay;
+- `window_score`: the last few turns scored together, to catch payloads split across turns;
+- `flagged`, `reason` and the per-turn `history`.
+
+It only **flags**: it never blocks, and every flag writes one JSON log line with ids and scores, but no message text.
+
+The proxy keeps its own copy of each conversation (in memory, TTL'd), so a client can't reset its score by editing the history it resends. Because that copy lives in the process, run a single uvicorn worker. Thresholds and weights are the `CONV_*` settings in `src/config.py`. Design and evaluation plan: [Conversation Monitor spec](docs/specs/conversation-monitor.md).
+
 Every response includes an `ml_classifier` object (`action`, `reason`, `score`, `latency_ms`, and per-head probabilities in `heads`) showing the ML classifier's verdict, even when a regex check was what decided the request, plus `regex.latency_ms` and the total `guardrail_latency_ms` (see [Input Guardrails](docs/INPUT_GUARDRAILS.md#api-behavior)).

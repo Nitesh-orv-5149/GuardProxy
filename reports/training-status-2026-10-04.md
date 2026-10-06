@@ -77,6 +77,31 @@ Injection detection improved, but over-blocking got worse. Run 4 now flags "Tran
 
 A likely cause is calibration: the up-weighting of rare classes in training pushes probabilities upward, so the shared 0.5 threshold is too low. The next step is choosing per-head thresholds on the held-out training split (not the benchmarks), then re-benchmarking.
 
+## Update 2026-10-06: runs 5 and 6 (fixing jailbreak detection)
+
+What changed:
+- **Mislabeled data:** 15.5% of the in-the-wild "regular" prompts we labeled `safe` were jailbreak-style, about 2,100 rows. That's more than the whole jailbreak class (1,333). Those rows, plus 29 from prompts.chat, are now dropped.
+- **New data:** Salad-Data (Apache-2.0) harmful questions and jailbreak-wrapped attacks, plus JailBreakV-28K (MIT) text jailbreaks. Rows that came from AdvBench (JailbreakBench's source) or from non-commercial sets are excluded.
+- **Contamination guard:** any training prompt that contains a JailbreakBench goal is dropped.
+- **Per-detector thresholds:** tuned on a validation slice of the training data and stored in the model (as logit_bias).
+- Class counts are now: jailbreak 7,486, toxic 22,444, injection 34,882, safe 75,103.
+
+Runs 5 and 6 use the same data with seeds 0 and 1. **Both passed the shipping checks:** jailbreak F1 0.95 (was 0.65), toxic 0.89, injection 0.99, hand-written set 0.857.
+
+| Benchmark (regex + ML) | Old TF-IDF | Run 4 | Run 5 | Run 6 |
+|---|---|---|---|---|
+| JailbreakBench | 0.50 | 0.765 | 0.755 (FPR 38%) | **0.805** (recall 91%, FPR 30%) |
+| safe-guard | 0.65 | 0.836 | 0.878 | **0.892** (recall 83.5%, FPR 5.1%) |
+| Gandalf recall | 0.77 | **0.95** | 0.91 | 0.92 |
+| XSTest | 0.53 | 0.72 | **0.73** | 0.71 (FPR ~50%) |
+
+Findings:
+- **Seed noise:** the same data with a different seed moves JailbreakBench by 5 points, so earlier run-to-run differences were mostly noise.
+- **Over-blocking got worse:** the extra harmful-question data makes the toxic detector fire on anything sensitive-sounding.
+- **Live model:** run 6 shipped automatically, but **the pointer was rolled back to `v20261002-075605`** because of the over-blocking.
+
+Next step: add more harmless look-alikes (the full OR-Bench-80k instead of a quarter), and tune the toxic threshold with a cap on false positives instead of maximizing F1.
+
 ## Stopped mid-way (2026-10-04, since resumed)
 
 Run 3 adds OR-Bench and prompts.chat as harmless look-alikes and gives the rare jailbreak class more weight in training. It was stopped at about 20% at your request; nothing was saved. To rerun it:
